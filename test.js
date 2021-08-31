@@ -16,6 +16,5 @@ function moveZeroes(nums){
             zero_index++;
         }
     }
-    console.log("测试git提交记录")
     return nums;
 }
