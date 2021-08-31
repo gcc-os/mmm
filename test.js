@@ -1,5 +1,5 @@
 function AA(){
-    console.log("AA fn!!");
+    console.log("你大爷还是你大爷!!");
 }
 
 function moveZeroes(nums){
