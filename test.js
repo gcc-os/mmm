@@ -1,5 +1,5 @@
 function AA(){
-    console.log("AA fn!!");
+    console.log("这是a2的修改内容");
 }
 
 function moveZeroes(nums){
