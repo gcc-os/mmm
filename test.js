@@ -1,3 +1,7 @@
+function AA(){
+    console.log("AA fn!!");
+}
+
 function moveZeroes(nums){
     console.log(nums);
     let zero_index = -1;
@@ -12,5 +16,6 @@ function moveZeroes(nums){
             zero_index++;
         }
     }
+    console.log("测试git提交记录")
     return nums;
 }
