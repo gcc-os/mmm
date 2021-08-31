@@ -1,5 +1,5 @@
-
-const KEYS = ['init','update','dataParse','supers'];
+const K2K = require('./key2key')
+const KEYS = ['constructor','update','dataParse','supers'];
 // 将property的所有字段赋给obj，并设置为只读
 function DefineReadOnlyProperty(obj, prototype) {
     if (!prototype || typeof prototype != 'object') return obj;
@@ -124,7 +124,7 @@ function isDictionary(obj){
     return true;
 }
 
-function CheckKeys(data){ // 检查是否有异常字段
+function CheckKeys(data){ // 检查字段是否合法
     if(!isDictionary(data)){
         console.error("数据模型中的data必须是对象/字典");
         return false;
@@ -145,90 +145,107 @@ function CheckKeys(data){ // 检查是否有异常字段
     }
 }
 
+function SetValuesForKeys(_data, data, key2key, emptyOthers){
+    if(isDictionary(data)){
+        let _translate_data = data;
+        if(isDictionary(key2key)){
+            _translate_data = K2K(data,key2key);
+        }
+        SetValuesByProperties(_data, _translate_data, emptyOthers);
+    }
+}
+
 function MMM(model, super_models){
-    function _OO(){
-        this.supers = null;
+    function _OO(__supers, __model){
+        const model = __model;
+        const super_models = __supers;
         let superArr = null;
         let didInit = false;
         function funExtends(){
             if(super_models && super_models.length > 0){
                 superArr = [];
                 super_models.forEach(fun => {
-                    fun.__origin.call(this);
+                    fun.__origin.call(this,fun.__supers, fun.__model);
                     superArr.push({ 
-                        init: this.init,
+                        constructor: this.constructor,
                         dataParse: this.dataParse,
+                        update: fun.__model.update || this.update,
                     })
                 })
             }
         }
-        function superInit(data){
+        function superConstructor(data, key2key){
             if(superArr && superArr.length > 0){
                 superArr.forEach((dic,index)=>{
-                    dic.init.call(this, data);
-                    superArr[index].update = this.update;
+                    dic.constructor.call(this, data, key2key);
                 })
             }
         }
-        function superUpdate(data){
+        function superUpdate(data, key2key, emptyOthers){
             if(superArr && superArr.length > 0){
                 superArr.forEach(dic=>{
-                    if(dic.update) dic.update.call(this, data);
+                    if(dic.update) dic.update.call(this, data, key2key, emptyOthers);
                 })
             }
         }
-        function superDataParse(data, emptyOthers){
+        function superDataParse(data, key2key, emptyOthers){
             if(superArr && superArr.length > 0){
                 superArr.forEach(dic=>{
-                    if(dic.dataParse) dic.dataParse.call(this, data, emptyOthers);
+                    if(dic.dataParse) {
+                        dic.dataParse.call(this, data, key2key, emptyOthers);
+                    }
                 })
             }
         }
         funExtends.call(this);
         const _data = DeepCopy(model.data);
         delete model.data;
+
+        this.supers = null;
         // 初始化数据 =======
-        this.init = function(data){
+        this.constructor = function(data, key2key){
+            console.log("constructor")
             if(didInit){
-                console.error("init 函数只能在构建数据模型时执行，不能手动执行.")
+                console.error("constructor 函数只能在构建数据模型时执行，不能手动执行.")
                 return;
             }
-            superInit.call(this, data);
-            // 如果不是对象，直接退出
-            if(CheckKeys(_data)){
-                DefineReadOnlyProperty(this,_data);
-                this.dataParse(data);
-            }
-            if(model.init) model.init.call(this,data);
-            if(model.update){
-                const _update = model.update;
-                model.update = function(data){
-                    superUpdate.call(this,data);
-                    _update.call(this,data);
-                }
-            }
-            for(let key in model){
-                if(key != 'init') this[key] = model[key];
-            }
-            this.supers = superArr;
+            if(CheckKeys(_data)) DefineReadOnlyProperty(this,_data);
+            superConstructor.call(this, data, key2key);
             didInit = true;
-        }
-        this.update = function(data, emptyOthers){
-            this.dataParse(data, emptyOthers);
-        }
-        this.dataParse = function(data, emptyOthers){
-            superDataParse(data, emptyOthers);
-            if(isDictionary(data)){
-                SetValuesByProperties(_data, data, emptyOthers);
+            for(let key in model){
+                if(['constructor','dataParse'].indexOf(key) < 0){
+                    this[key] = model[key];
+                }
+                if(key == 'init') model[key].call(this);
             }
+            // 重载父类函数
+            this.supers = superArr;
+            this.superUpdate = superUpdate;
+            this.superDataParse = superDataParse;
+        }
+        this.update = function(data, key2key, emptyOthers){
+            console.log("---update")
+            superUpdate(data, key2key, emptyOthers);
+            SetValuesForKeys(_data, data, key2key, emptyOthers);
+        }
+        this.dataParse = function(data, key2key, emptyOthers){
+            superDataParse(data, key2key, emptyOthers);
+            SetValuesForKeys(_data, data, key2key, emptyOthers);
         }
     }
     return class{
         static __origin = _OO;
-        constructor(data){
+        static __supers = super_models;
+        static __model = model;
+        static create(data, key2key){
+            const _instance = new _OO(this.__supers, this.__model);
+            _instance.constructor(data, key2key);
+            _instance.dataParse(data, key2key);
+            return _instance;
+        }
+        constructor(data, key2key){
             const _instance = new _OO();
-            _instance.init(data);
-            model.data = null;
+            _instance.constructor(data, key2key);
             return _instance;
         }
     }
