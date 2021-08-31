@@ -14,5 +14,3 @@ function moveZeroes(nums){
     }
     return nums;
 }
-
-console.log(moveZeroes([0,0,0,3,12]))
