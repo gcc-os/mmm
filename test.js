@@ -1,23 +1,43 @@
-function AA(){
-    console.log("这是a2的修改内容");
-}
+const MMM = require('./index')
 
-function moveZeroes(nums){
-    console.log(nums);
-    let zero_index = -1;
-    for(let index = 0; index < nums.length; index++){
-        const num = nums[index];
-        if(zero_index == -1 && num == 0){
-            zero_index = index;
-        }
-        if(num != 0 && zero_index != -1){
-            nums[zero_index] = num;
-            nums[index] = 0;
-            zero_index++;
+const AA = MMM({
+    data:{
+        aa:'郭成功',
+        get name(){
+            return `Guo~郭~ ${this.aa}`
         }
     }
-    console.log("测试git提交记录")
-    return nums;
-}
+})
+const BB = MMM({
+    data:{
+        bb:'richie',
+    },
+    update(data){
+        this.supeUpdate(data);
+    }
+},[AA])
+const CC = MMM({
+    data:{
+        cc:'world',
+        get richie(){
+            console.log("================================================this");
+            // console.log(this.name);
+            console.log(this);
+            return `richie is ${this.name}`
+        }
+    },
+    sayMyName(){
+        console.log(`我的名字是: ${this.aa}`);
+    },
+    // update(data, key2key){
+    //     this.dataParse(data, key2key);
+    // },
+}, [BB]);
 
-console.log(moveZeroes([0,0,0,3,12]))
+const instance = CC.New({aa:'是你妈妈啊'});
+console.clear();
+// console.log(":  sayMyName");
+// instance.sayMyName();
+// instance.update({aa:'是你爸爸'});
+console.log(instance.name);
+console.log(instance.richie);

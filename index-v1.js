@@ -1,5 +1,5 @@
 const K2K = require('./key2key')
-const KEYS = ['constructor','update','dataParse'];
+const KEYS = ['constructor','update','dataParse','supers'];
 // 将property的所有字段赋给obj，并设置为只读
 function DefineReadOnlyProperty(obj, prototype) {
     if (!prototype || typeof prototype != 'object') return obj;
@@ -155,89 +155,95 @@ function SetValuesForKeys(_data, data, key2key, emptyOthers){
     }
 }
 
-
-function FindInstance(obj, prop){
-    if(prop in obj) return obj;
-    if(!obj._supers_ || obj._supers_.length == 0) return null;
-    for (let i = 0; i < obj._supers_.length; i++){
-        const _obj = obj._supers_[i];
-        const res = FindInstance(_obj, prop);
-        if(res) return res;
-    }
-    return null;
-}
-
-
 function MMM(model, super_models){
     function _OO(__supers, __model){
         const model = __model;
+        const super_models = __supers;
+        let superArr = null;
+        let didInit = false;
+        function funExtends(){
+            if(super_models && super_models.length > 0){
+                superArr = [];
+                super_models.forEach(fun => {
+                    fun.__origin.call(this,fun.__supers, fun.__model);
+                    superArr.push({ 
+                        constructor: this.constructor,
+                        dataParse: this.dataParse,
+                        update: fun.__model.update || this.update,
+                    })
+                })
+            }
+        }
+        function superConstructor(data, key2key){
+            if(superArr && superArr.length > 0){
+                superArr.forEach((dic,index)=>{
+                    dic.constructor.call(this, data, key2key);
+                })
+            }
+        }
+        function superUpdate(data, key2key, emptyOthers){
+            console.log('superArr====');
+            console.log(superArr);
+            if(superArr && superArr.length > 0){
+                superArr.forEach(dic=>{
+                    if(dic.update) dic.update.call(this, data, key2key, emptyOthers);
+                })
+            }
+        }
+        function superDataParse(data, key2key, emptyOthers){
+            if(superArr && superArr.length > 0){
+                superArr.forEach(dic=>{
+                    if(dic.dataParse) {
+                        dic.dataParse.call(this, data, key2key, emptyOthers);
+                    }
+                })
+            }
+        }
+        funExtends.call(this);
         const _data = DeepCopy(model.data);
         delete model.data;
-        this._supers_ = null;
-        let _didInit = false;
-        this.update = function(data, key2key, emptyOthers){
-            SetValuesForKeys(_data, data, key2key, emptyOthers);
-            this.supeUpdate(data, key2key, emptyOthers);
-        }
-        this.dataParse = function(data, key2key, emptyOthers){
-            SetValuesForKeys(_data, data, key2key, emptyOthers);
-            this.supeDataParse(data, key2key, emptyOthers);
-        }
-        this.supeDataParse = (data, key2key, emptyOthers)=>{
-            if(this._supers_ && this._supers_.length){
-                this._supers_.forEach(superObj => {
-                    if(superObj.dataParse) superObj.dataParse(data, key2key, emptyOthers)
-                })
-            }
-        }
-        this.supeUpdate = (data, key2key, emptyOthers)=>{
-            if(this._supers_ && this._supers_.length){
-                this._supers_.forEach(superObj => {
-                    if(superObj.update) superObj.update(data, key2key, emptyOthers)
-                })
-            }
-        }
+
+        this.supers = null;
         // 初始化数据 =======
-        this.init = function(data, key2key){
-            if(_didInit){
+        this.constructor = function(data, key2key){
+            console.log("constructor")
+            if(didInit){
                 console.error("constructor 函数只能在构建数据模型时执行，不能手动执行.")
                 return;
             }
-            _didInit = true;
-            if(__supers && __supers.length){
-                this._supers_ = [];
-                __supers.forEach(SUP => {
-                    this._supers_.push(SUP.New(data, key2key));
-                })
+            if(CheckKeys(_data)) DefineReadOnlyProperty(this,_data);
+            superConstructor.call(this, data, key2key);
+            didInit = true;
+            for(let key in model){
+                if(['constructor','dataParse'].indexOf(key) < 0){
+                    this[key] = model[key];
+                }
+                if(key == 'init') model[key].call(this);
             }
-            Object.assign(this, model);
-            if(CheckKeys(_data)) DefineReadOnlyProperty(this, _data);
-            this.update(data, key2key);
+            // 重载父类函数
+            this.supers = superArr;
+            this.superUpdate = superUpdate;
+            this.superDataParse = superDataParse;
+        }
+        this.update = function(data, key2key, emptyOthers){
+            console.log("---update")
+            superUpdate(data, key2key, emptyOthers);
+            SetValuesForKeys(_data, data, key2key, emptyOthers);
+        }
+        this.dataParse = function(data, key2key, emptyOthers){
+            superDataParse(data, key2key, emptyOthers);
+            SetValuesForKeys(_data, data, key2key, emptyOthers);
         }
     }
     return class{
+        static __origin = _OO;
         static __supers = super_models;
         static __model = model;
-        static New(data, key2key){
+        static create(data, key2key){
             const _instance = new _OO(this.__supers, this.__model);
-            _instance.init(data, key2key);
-            const instance = new Proxy(_instance, {
-                get(obj, key){
-                    console.log("key === ",key);
-                    const curObj = FindInstance(obj, key);
-                    if(!curObj) return null;
-                    return curObj[key];
-                },
-                set(obj, key, value){
-                    const curObj = FindInstance(obj, key);
-                    if(curObj){
-                        curObj[key] = value;
-                    }else{
-                        console.log(`: ERROR =====${key}`);
-                    }
-                },
-            });
-            return instance;
+            _instance.constructor(data, key2key);
+            _instance.dataParse(data, key2key);
+            return _instance;
         }
         constructor(data, key2key){
             const _instance = new _OO();

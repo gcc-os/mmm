@@ -1,5 +1,5 @@
 const K2K = require('./key2key')
-const KEYS = ['constructor','update','dataParse'];
+const KEYS = ['update','dataParse'];
 // 将property的所有字段赋给obj，并设置为只读
 function DefineReadOnlyProperty(obj, prototype) {
     if (!prototype || typeof prototype != 'object') return obj;
@@ -167,8 +167,20 @@ function FindInstance(obj, prop){
     return null;
 }
 
+function Super(){
+    return new Proxy({}, {
+        get(obj, key){
+            // key 的范围是： 
+            const curObj = FindInstance(obj, key);
+            if(!curObj) return null;
+            return curObj[key];
+        },
+        set(obj, key, value){},
+    });
+}
 
 function MMM(model, super_models){
+    console.log(model)
     function _OO(__supers, __model){
         const model = __model;
         const _data = DeepCopy(model.data);
@@ -176,6 +188,7 @@ function MMM(model, super_models){
         this._supers_ = null;
         let _didInit = false;
         this.update = function(data, key2key, emptyOthers){
+            console.log("exeupdate")
             SetValuesForKeys(_data, data, key2key, emptyOthers);
             this.supeUpdate(data, key2key, emptyOthers);
         }
@@ -211,11 +224,11 @@ function MMM(model, super_models){
                 })
             }
             Object.assign(this, model);
-            if(CheckKeys(_data)) DefineReadOnlyProperty(this, _data);
+            if(CheckKeys(_data)) DefineReadOnlyProperty(this,_data);
             this.update(data, key2key);
         }
     }
-    return class{
+    return class {
         static __supers = super_models;
         static __model = model;
         static New(data, key2key){
@@ -223,7 +236,6 @@ function MMM(model, super_models){
             _instance.init(data, key2key);
             const instance = new Proxy(_instance, {
                 get(obj, key){
-                    console.log("key === ",key);
                     const curObj = FindInstance(obj, key);
                     if(!curObj) return null;
                     return curObj[key];
